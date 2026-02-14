@@ -18,50 +18,33 @@ This is a **Retrieval-Augmented Generation (RAG)** system with a conversational 
 ---
 
 
-Tech Stack
+## Tech Stack
 Frontend:
-React
-TypeScript
-Optional UI frameworks: Material UI / TailwindCSS / ShadCN
-API communication via REST or WebSockets
+- React
+- TypeScript
+- Optional UI frameworks: Material UI / TailwindCSS / ShadCN
+- API communication via REST or WebSockets
 
 Backend:
-Node.js + TypeScript
-Express.js / Fastify (API layer)
-RAG orchestration logic
-Embedding generation pipeline
-LLM integration (OpenAI / Azure OpenAI / local model)
+- Node.js + TypeScript
+- Express.js / Fastify (API layer)
+- RAG orchestration logic
+- Embedding generation pipeline
+- LLM integration (OpenAI / Azure OpenAI / local model)
 
 AI Layer:
-Embedding model (e.g., OpenAI Embeddings or local embedding model)
-Large Language Model (GPT / Llama / Claude etc.)
-Python
-Prompt templating & context injection
+- Embedding model (e.g., OpenAI Embeddings or local embedding model)
+- Large Language Model (GPT / Llama / Claude etc.)
+- Python
+- Prompt templating & context injection
 
 Database Layer
-Milvus (Vector Database)
-Stores document embeddings
-Performs similarity search (semantic retrieval)
+- Milvus (Vector Database)
+- Stores document embeddings
+- Performs similarity search (semantic retrieval)
 
 Optional:
-PostgreSQL / MongoDB (metadata & conversation history)
+- PostgreSQL / MongoDB (metadata & conversation history)
 
 
 
-                ┌──────────────────────┐
-                │     React Frontend   │
-                │   (TypeScript)       │
-                └──────────┬───────────┘
-                           │
-                           ▼
-                ┌──────────────────────┐
-                │  Node.js Backend     │
-                │  (TypeScript API)    │
-                └──────────┬───────────┘
-                           │
-        ┌──────────────────┼──────────────────┐
-        ▼                  ▼                  ▼
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐
-│ Embedding    │   │   Milvus     │   │     LLM      │
-│ Model        │   │ Vector DB    │   │  (GPT/Llama) │
-└──────────────┘   └──────────────┘   └──────────────┘
