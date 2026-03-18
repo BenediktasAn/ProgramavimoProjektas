@@ -1,13 +1,24 @@
 import os
 from pathlib import Path
-from openai import OpenAI
+from groq import Groq
 from dotenv import load_dotenv
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# System prompt — tells the LLM how to behave
+# Load the vector store
+CHROMA_DIR = Path(__file__).resolve().parent / "chroma_db"
+embeddings = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+)
+vectorstore = Chroma(
+    persist_directory=str(CHROMA_DIR),
+    embedding_function=embeddings,
+)
+
 SYSTEM_PROMPT = """You are a helpful university assistant chatbot. 
 You answer questions about university rules, regulations, scholarships, 
 dormitories, and academic policies.
@@ -18,40 +29,34 @@ Rules:
   "I don't have information about that. Please contact the student office."
 - Be friendly and concise.
 - Always cite which document/section your answer comes from when possible.
+- Answer in the same language the student uses. If they ask in Lithuanian, respond in Lithuanian. If in English, respond in English.
 """
 
 
 def get_response(user_message: str, conversation_history: list) -> str:
-    """
-    Takes a user message and conversation history, returns the chatbot's response.
-    
-    Later, this is where you'll add RAG:
-    1. Search the vector store for relevant document chunks
-    2. Add those chunks to the prompt
-    3. Send to the LLM
-    """
-    
-    # Build the messages list for the API
+    # RAG: Search for relevant document chunks
+    results = vectorstore.similarity_search(user_message, k=3)
+    context = "\n\n".join([
+        f"[Source: {doc.metadata.get('source', 'unknown')}, Page: {doc.metadata.get('page', '?')}]\n{doc.page_content}"
+        for doc in results
+    ])
+
+    # Build the messages list
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    
-    # Add conversation history (so the bot remembers previous messages)
     messages.extend(conversation_history)
-    
-    # Add the new user message
-    messages.append({"role": "user", "content": user_message})
-    
-    # TODO: RAG step will go here later
-    # relevant_chunks = vectorstore.similarity_search(user_message, k=3)
-    # context = "\n\n".join([chunk.page_content for chunk in relevant_chunks])
-    # Modify the user message to include context:
-    # messages[-1]["content"] = f"Context:\n{context}\n\nQuestion: {user_message}"
-    
+
+    # Add the user message with retrieved context
+    messages.append({
+        "role": "user",
+        "content": f"Context from university documents:\n{context}\n\nStudent question: {user_message}",
+    })
+
     # Call the LLM
     response = client.chat.completions.create(
-        model="gpt-4o-mini",  # cheap and good enough for Q&A
+        model="llama-3.3-70b-versatile",
         messages=messages,
-        temperature=0.3,  # low temperature = more factual, less creative
+        temperature=0.3,
         max_tokens=500,
     )
-    
+
     return response.choices[0].message.content
