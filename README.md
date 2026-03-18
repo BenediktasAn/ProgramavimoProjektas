@@ -15,7 +15,7 @@ Built with React + FastAPI + ChromaDB + Groq (LLaMA 3.3).
 
 ---
 
-## Setup
+## Running locally
 
 ### 1. Clone the repo
 
@@ -38,7 +38,6 @@ HF_API_KEY=your_huggingface_token_here
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-
 pip install fastapi uvicorn groq langchain-community langchain-core python-dotenv requests
 ```
 
@@ -50,29 +49,121 @@ npm install
 cd ..
 ```
 
----
+### 5. Start both servers (two terminals)
 
-## Running locally
-
-You need **two terminals** running at the same time.
-
-### Terminal 1 — Chatbot backend
-
+**Terminal 1 — backend:**
 ```bash
 source venv/bin/activate
 uvicorn chatbot.main:app --reload --port 8000
 ```
 
-The API will be available at `http://localhost:8000`.
-
-### Terminal 2 — Frontend
-
+**Terminal 2 — frontend:**
 ```bash
 cd WebPage
 npm run dev
 ```
 
-The website will be available at `http://localhost:5173`.
+Open **http://localhost:5173**.
+
+---
+
+## Deploying to a server (Ubuntu + Nginx)
+
+These steps assume you have a VPS with Nginx and SSL already configured (e.g. via Certbot).
+
+### 1. Install Node.js
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+source ~/.bashrc
+nvm install 22
+```
+
+### 2. Clone the repo
+
+```bash
+git clone https://github.com/BenediktasAn/ProgramavimoProjektas.git /var/www/ProgramavimoProjektas
+cd /var/www/ProgramavimoProjektas
+```
+
+### 3. Create the `.env` file
+
+```bash
+nano .env
+```
+
+Paste your keys:
+```
+GROQ_API_KEY=your_groq_key_here
+HF_API_KEY=your_huggingface_token_here
+```
+
+### 4. Set up the Python environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install fastapi uvicorn groq langchain-community langchain-core python-dotenv requests
+```
+
+### 5. Build the frontend
+
+```bash
+cd WebPage
+npm install
+npm run build
+cd ..
+```
+
+### 6. Configure Nginx
+
+Edit your Nginx site config (e.g. `/etc/nginx/sites-available/default`) and add a proxy block for the API inside the `server` block:
+
+```nginx
+location / {
+    try_files $uri /index.html;
+}
+
+location /api/ {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+Also make sure the `root` points to the built frontend:
+
+```nginx
+root /var/www/ProgramavimoProjektas/WebPage/dist;
+```
+
+Reload Nginx:
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 7. Start the backend (runs in background)
+
+```bash
+source venv/bin/activate
+nohup uvicorn chatbot.main:app --port 8000 &
+```
+
+Logs go to `nohup.out`. To stop it: `pkill -f uvicorn`.
+
+---
+
+## Updating the server after a code change
+
+```bash
+cd /var/www/ProgramavimoProjektas
+git pull origin main
+cd WebPage && npm install && npm run build && cd ..
+sudo systemctl reload nginx
+pkill -f uvicorn
+source venv/bin/activate
+nohup uvicorn chatbot.main:app --port 8000 &
+```
 
 ---
 
