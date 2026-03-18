@@ -535,3 +535,41 @@ footer { padding: var(--sp-6) 0 var(--sp-7); color: var(--text-secondary); }
   position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
+
+
+.document-list {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-20);
+  padding: var(--sp-5);
+  box-shadow: var(--shadow-sm);
+}
+
+.document-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.document-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-3) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.document-item:last-child {
+  border-bottom: none;
+}
+
+.document-item p {
+  margin: 4px 0 0 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-100);
+}
+
+.document-size {
+  color: var(--text-secondary);
+  font-size: var(--fs-100);
+}
