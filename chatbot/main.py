@@ -5,13 +5,11 @@ from .chatbot import get_response
 
 app = FastAPI(title="University Chatbot API")
 
-# Allows frontend to call this API (CORS)
-# Replace "*" with your actual frontend URL in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["https://askktu.online", "https://www.askktu.online"],
+    allow_methods=["POST", "GET"],
+    allow_headers=["Content-Type"],
 )
 
 
