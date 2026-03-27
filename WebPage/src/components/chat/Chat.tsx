@@ -25,10 +25,18 @@ export default function Chat() {
   const [isOnline] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const handleStop = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    // Immediate UI update; fetch will reject shortly after.
+    setIsLoading(false);
+  };
 
   const handleSend = async () => {
     const trimmed = input.trim();
@@ -44,6 +52,9 @@ export default function Chat() {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const history = messages.map((m) => ({
         role: m.role,
@@ -53,12 +64,14 @@ export default function Chat() {
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({ message: trimmed, conversation_history: history }),
       });
       if (!res.ok) {
         throw new Error(`Chat request failed: ${res.status}`);
       }
       const data = (await res.json()) as { response?: string };
+      if (controller.signal.aborted) return;
       const botMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
@@ -66,7 +79,14 @@ export default function Chat() {
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, botMessage]);
-    } catch {
+    } catch (err) {
+      // If the user cancels, don't show an error bubble.
+      if (
+        err instanceof DOMException &&
+        (err.name === "AbortError" || err.message === "The operation was aborted.")
+      ) {
+        return;
+      }
       const errorMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
@@ -76,6 +96,7 @@ export default function Chat() {
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
       // Clear only after submit completes so the field stays readable while loading.
       setInput("");
     }
@@ -219,6 +240,31 @@ export default function Chat() {
           disabled={isLoading}
           aria-label="Message to chatbot"
         />
+        {isLoading && (
+          <button
+            type="button"
+            className="chat-stop"
+            onClick={handleStop}
+            aria-label="Stop generating"
+            title="Stop generating"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="7" y="7" width="10" height="10" rx="2" ry="2" />
+              <path d="M9.5 9.5L14.5 14.5" />
+              <path d="M14.5 9.5L9.5 14.5" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           className="chat-send"

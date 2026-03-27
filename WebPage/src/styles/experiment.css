@@ -239,7 +239,7 @@ p, ul, ol {
 }
 .chat .ask {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 10px;
   align-items: center;
 }
@@ -281,6 +281,33 @@ p, ul, ol {
   cursor: pointer;
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
   transition: filter 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+}
+
+.chat-stop {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+  transition: filter 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease;
+}
+.chat-stop:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow: 0 6px 18px rgba(249, 115, 22, 0.45);
+}
+.chat-stop:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.chat-stop:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .chat-send:hover:not(:disabled) {
   filter: brightness(1.05);
