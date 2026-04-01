@@ -22,7 +22,8 @@ class HFEmbeddings(Embeddings):
             headers=self.headers,
             json={"inputs": texts, "options": {"wait_for_model": True}},
         )
-        return response.json()
+        result = response.json()
+        return result
 
     def embed_query(self, text: str) -> list:
         return self.embed_documents([text])[0]
@@ -52,10 +53,21 @@ Rules:
 - Answer in the same language the student uses. If they ask in Lithuanian, respond in Lithuanian. If in English, respond in English.
 """
 
-
 def get_response(user_message: str, conversation_history: list) -> str:
-    # RAG: Search for relevant document chunks
-    results = vectorstore.similarity_search(user_message, k=3)
+    # RAG: Search for relevant document chunks with deduplication
+    raw_results = vectorstore.similarity_search(user_message, k=10)
+    
+    # Deduplicate by content
+    seen = set()
+    results = []
+    for doc in raw_results:
+        content_key = doc.page_content.strip()[:200]
+        if content_key not in seen:
+            seen.add(content_key)
+            results.append(doc)
+        if len(results) == 5:
+            break
+
     context = "\n\n".join([
         f"[Source: {doc.metadata.get('source', 'unknown')}, Page: {doc.metadata.get('page', '?')}]\n{doc.page_content}"
         for doc in results
@@ -65,13 +77,11 @@ def get_response(user_message: str, conversation_history: list) -> str:
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(conversation_history)
 
-    # Add the user message with retrieved context
     messages.append({
         "role": "user",
         "content": f"Context from university documents:\n{context}\n\nStudent question: {user_message}",
     })
 
-    # Call the LLM
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=messages,

@@ -10,7 +10,7 @@ app = FastAPI(title="University Chatbot API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://askktu.online", "https://www.askktu.online"],
+    allow_origins=["https://askktu.online", "https://www.askktu.online", "http://localhost:8000"],
     allow_methods=["POST", "GET"],
     allow_headers=["Content-Type"],
 )
