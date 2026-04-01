@@ -1,7 +1,7 @@
-import PageLayout from "../../components/layout/PageLayout/PageLayout";
+import { useState } from "react";
+import MapLayout from "../../components/layout/PageLayout/MapLayout";
 import Header from "../../components/layout/Header/Header";
 import { TopNav } from "../../components/layout/TopNav/TopNav";
-import RightPanel from "../../components/layout/RightPanel/RightPanel";
 import Footer from "../../components/layout/Footer/Footer";
 import Map from "../../components/map/Map";
 import logoSrc from "../../assets/logo.png";
@@ -11,9 +11,18 @@ export interface MapPageProps {
   onToggleTheme: () => void;
 }
 
+export interface Building {
+  id: number;
+  name: string;
+  description: string;
+  position: [number, number];
+}
+
 export default function MapPage({ theme, onToggleTheme }: MapPageProps) {
+  const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+
   return (
-    <PageLayout
+    <MapLayout
       header={
         <Header
           logo={{ src: logoSrc, alt: "askKTU logo" }}
@@ -22,12 +31,22 @@ export default function MapPage({ theme, onToggleTheme }: MapPageProps) {
         />
       }
       topNav={<TopNav />}
-      rightMain={
-        <>
-          <Map />
-          <RightPanel />
-        </>
+      leftColumn={
+        <div>
+          {selectedBuilding ? (
+            <>
+              <h2>{selectedBuilding.name}</h2>
+              <p>{selectedBuilding.description}</p>
+            </>
+          ) : (
+            <>
+              <h2>Pasirinkite pastatą</h2>
+              <p>Paspauskite ant vietos nuorodų, kad matytumėte informacija.</p>
+            </>
+          )}
+        </div>
       }
+      rightMain={<Map onSelectBuilding={setSelectedBuilding} />}
       footer={<Footer />}
     />
   );
