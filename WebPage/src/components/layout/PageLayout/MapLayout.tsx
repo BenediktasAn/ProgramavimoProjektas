@@ -31,27 +31,41 @@ export default function MapLayout({
       {/* Main section */}
       <main id="main" className="container" style={{ paddingTop: 24, paddingBottom: 24 }}>
         <section className="hero">
-          <div className="hero-layout" style={{ display: "flex", gap: 0 }}>
+          <div
+            className="hero-layout"
+            style={{
+              display: "flex",
+              gap: "16px",
+              alignItems: "stretch",
+            }}
+          >
             {/* Left sidebar */}
             {leftColumn && (
               <div
                 style={{
                   width: "320px",
+                  height: "500px", // 🔥 svarbu – fiksuotas aukštis
                   padding: "20px",
-                  borderRight: "1px solid #ddd",
+                  border: "1px solid #ddd",
+                  borderRadius: "12px",
                   boxSizing: "border-box",
                   background: "#fff",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "flex-start",
+                  overflowY: "auto", // 🔥 scroll vietoj tempimo
                 }}
               >
                 {leftColumn}
               </div>
             )}
-
             {/* Right main content */}
-            <div style={{ flex: 1, height: "500px" }}>
+            <div
+              style={{
+                flex: 1,
+                height: "500px",
+                border: "1px solid #ddd",
+                borderRadius: "12px",
+                overflow: "hidden",
+              }}
+            >
               {rightMain}
             </div>
           </div>

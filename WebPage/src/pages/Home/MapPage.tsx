@@ -15,6 +15,8 @@ export interface Building {
   id: number;
   name: string;
   description: string;
+  workingHours: string;
+  services: string[];
   position: [number, number];
 }
 
@@ -37,11 +39,57 @@ export default function MapPage({ theme, onToggleTheme }: MapPageProps) {
             <>
               <h2>{selectedBuilding.name}</h2>
               <p>{selectedBuilding.description}</p>
+
+              <p style={{ marginTop: "12px" }}>
+                <strong>Darbo laikas:</strong> {selectedBuilding.workingHours}
+              </p>
+
+              <h3 style={{ marginTop: "16px" }}>Paslaugos</h3>
+
+              <div
+                style={{
+                  marginTop: "12px",
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
+                {selectedBuilding.services.map((service, index) => (
+                  <span
+                    key={index}
+                    style={{
+                      background: "#eef2ff",
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      fontSize: "14px",
+                    }}
+                  >
+                    {service}
+                  </span>
+                ))}
+              </div>
+
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${selectedBuilding.position[0]},${selectedBuilding.position[1]}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "inline-block",
+                  marginTop: "16px",
+                  padding: "10px 14px",
+                  background: "#2563eb",
+                  color: "#fff",
+                  textDecoration: "none",
+                  borderRadius: "8px",
+                }}
+              >
+                Atidaryti „Maps“
+              </a>
             </>
           ) : (
             <>
               <h2>Pasirinkite pastatą</h2>
-              <p>Paspauskite ant vietos nuorodų, kad matytumėte informacija.</p>
+              <p>Paspauskite ant vietos nuorodų, kad matytumėte informaciją.</p>
             </>
           )}
         </div>
