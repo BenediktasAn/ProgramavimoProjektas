@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useState } from "react";
 import HomePage from "./pages/Home/HomePage";
 import DocumentPage from "./pages/Document/DocumentPage";
 import StatsPage from "./pages/Stats/StatsPage";
+import LoginPage from "./pages/Home/LoginPage";
 
 const MapPage = lazy(() => import("./pages/Home/MapPage"));
 
@@ -29,6 +30,9 @@ export default function App() {
   const [route, setRoute] = useState<Route>(() =>
     typeof window === "undefined" ? "home" : routeFromHash(window.location.hash),
   );
+  const [isAuthenticated, setIsAuthenticated] = useState(
+      () => localStorage.getItem("isAuthenticated") === "true"
+  ); // To log out: localStorage.removeItem("isAuthenticated");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -47,6 +51,10 @@ export default function App() {
 
   const onToggleTheme = () =>
     setTheme((t) => (t === "light" ? "dark" : "light"));
+
+  if (!isAuthenticated) {
+    return <LoginPage onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
 
   if (route === "map") {
     return (

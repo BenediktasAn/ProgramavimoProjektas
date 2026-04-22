@@ -708,6 +708,7 @@ p, ul, ol {
   width: 100%; min-height: 44px; padding: 12px 14px;
   border-radius: 14px; border: 1px solid var(--border); background: var(--surface);
   color: var(--text-primary); font-size: var(--fs-200);
+  position: relative;
 }
 
 /* Mygtukai */
@@ -726,7 +727,7 @@ p, ul, ol {
 .btn:disabled { opacity: .6; cursor: not-allowed; }
 
 .btn--primary {
-  --bg: linear-gradient(135deg, var(--cta-500), var(--cta-700));
+  --bg: linear-gradient(135deg, var(--cta-600), var(--cta-700));
   --fg: var(--text-inverse);
   border: 0; box-shadow: 0 10px 24px rgba(255, 122, 46, .35);
 }
@@ -867,4 +868,12 @@ footer { padding: var(--sp-6) 0 var(--sp-7); color: var(--text-secondary); }
   flex: 1;
   max-width: 80%;           /* ← This is the key: limits the text area */
   min-width: 0;               /* Allows flex shrinking + text wrapping */
+}
+
+
+.input:focus-visible {
+  outline: 1px solid #000;
+  outline-offset: 1px;
+  border-radius: 14px;
+  z-index: 1;
 }
