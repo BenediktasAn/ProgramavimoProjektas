@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { normalizeCitations } from "./normalizeCitations";
 import type { NormalizedCitation } from "./normalizeCitations";
 import { extractCitationsFromAnswer } from "./extractCitationsFromAnswer";
@@ -7,6 +13,7 @@ export type { NormalizedCitation };
 
 const CHATBOT_NAME = "askKTU Chatbot";
 const API_URL = import.meta.env.VITE_API_URL ?? "";
+const MarkdownCodeHighlighter = SyntaxHighlighter as unknown as ComponentType<Record<string, unknown>>;
 
 type ChatRole = "user" | "assistant";
 
@@ -46,6 +53,34 @@ function getLatestAssistantCitations(messages: ChatMessage[]): NormalizedCitatio
 }
 
 const TITLE_TRUNCATE = 50;
+const markdownComponents: Components = {
+  code({ className, children, ...props }) {
+    const match = /language-(\w+)/.exec(className ?? "");
+    const code = String(children).replace(/\n$/, "");
+    const isCodeBlock = Boolean(match?.[1]) || code.includes("\n");
+    if (isCodeBlock) {
+      return (
+        <MarkdownCodeHighlighter
+          style={oneLight}
+          language={match?.[1] ?? "text"}
+          PreTag="div"
+          className="chat-markdown-codeblock"
+          {...props}
+        >
+          {code}
+        </MarkdownCodeHighlighter>
+      );
+    }
+    return (
+      <code className={`chat-markdown-inline-code ${className ?? ""}`} {...props}>
+        {children}
+      </code>
+    );
+  },
+  a({ ...props }) {
+    return <a {...props} target="_blank" rel="noopener noreferrer" />;
+  },
+};
 
 
 type ChatWidgetTab = "chat" | "sources";
@@ -402,7 +437,20 @@ export default function Chat({
                     </svg>
                   </span>
                 )}
-                <span>{message.text}</span>
+                {message.meta?.kind === "error" ? (
+                  <span>{message.text}</span>
+                ) : (
+                  <div className="chat-markdown">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeSanitize]}
+                      skipHtml
+                      components={markdownComponents}
+                    >
+                      {message.text}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
               {message.meta?.kind === "error" && (
                 <div className="chat-error-actions">

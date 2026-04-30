@@ -1050,7 +1050,62 @@ p, ul, ol {
   word-wrap: break-word;
   overflow-wrap: break-word;
   word-break: break-word;
-  white-space: pre-wrap;
+  white-space: normal;
+}
+
+.chat-markdown > *:first-child {
+  margin-top: 0;
+}
+
+.chat-markdown > *:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown p,
+.chat-markdown ul,
+.chat-markdown ol,
+.chat-markdown pre,
+.chat-markdown blockquote,
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4 {
+  margin: 0 0 10px;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+  padding-left: 22px;
+}
+
+.chat-markdown li + li {
+  margin-top: 4px;
+}
+
+.chat-markdown-inline-code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(148, 163, 184, 0.18);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+
+.chat-markdown-codeblock {
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.chat-markdown-codeblock pre {
+  margin: 0 !important;
+  padding: 12px !important;
+  background: transparent !important;
+}
+
+[data-theme="dark"] .chat-markdown-inline-code {
+  background: rgba(148, 163, 184, 0.24);
 }
 
 .chat-message-text--error {
