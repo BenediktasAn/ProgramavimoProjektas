@@ -4,16 +4,18 @@ import { TopNav } from "../../components/layout/TopNav/TopNav";
 import Footer from "../../components/layout/Footer/Footer";
 import logoSrc from "../../assets/logo.png";
 import ChatStats from "../../components/Document/ChatStats";
+import { useLocale } from "../../i18n/LocaleContext";
 
 export default function StatsPage() {
+    const { t } = useLocale();
     return (
         <PageLayoutDocs
             header={<Header logo={{ src: logoSrc, alt: "askKTU logo" }} />}
             topNav={<TopNav />}
             rightMain={
                 <section className="document-container">
-                    <h1>Chatbot Statistics</h1>
-                    <p>Live usage data from the question log.</p>
+                    <h1>{t("stats.title")}</h1>
+                    <p>{t("stats.subtitle")}</p>
                     <ChatStats />
                 </section>
             }

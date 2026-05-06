@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLocale } from "../../../i18n/LocaleContext";
 
 export interface MapLayoutProps {
   header: ReactNode;
@@ -15,10 +16,11 @@ export default function MapLayout({
   rightMain,
   footer
 }: MapLayoutProps) {
+  const { t } = useLocale();
   return (
     <>
       {/* Accessibility: skip to main */}
-      <a className="skip-link" href="#main">Skip to main content</a>
+      <a className="skip-link" href="#main">{t("layout.skipToMain")}</a>
 
       {/* Header and TopNav */}
       <div

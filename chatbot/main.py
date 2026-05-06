@@ -2,13 +2,20 @@ import os
 import json
 from collections import Counter
 from datetime import datetime, timezone, date
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
-from .chatbot import get_response
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from .chatbot import get_response, get_response_stream
 
 DOCUMENTS_DIR = os.path.join(os.path.dirname(__file__), "documents")
 LOG_FILE = os.path.join(os.path.dirname(__file__), "questions.log")
+FEEDBACK_FILE = os.path.join(os.path.dirname(__file__), "feedback.log")
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 def log_question(question: str, answered: bool) -> None:
@@ -20,7 +27,18 @@ def log_question(question: str, answered: bool) -> None:
     with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
 
+
 app = FastAPI(title="University Chatbot API")
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"response": "Too many requests. Please wait a moment and try again."}
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,33 +48,59 @@ app.add_middleware(
 )
 
 
-# Define what the frontend sends to us
 class ChatRequest(BaseModel):
     message: str
-    conversation_history: list = []  # optional, defaults to empty
+    conversation_history: list = []
 
 
-# Define what we send back
 class ChatResponse(BaseModel):
     response: str
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
-    """
-    Main chat endpoint. The frontend sends a message,
-    we return the chatbot's response.
-    """
+@limiter.limit("10/minute")
+async def chat(request: Request, chat_request: ChatRequest):
     answered = False
     try:
         bot_response = get_response(
-            user_message=request.message,
-            conversation_history=request.conversation_history,
+            user_message=chat_request.message,
+            conversation_history=chat_request.conversation_history,
         )
         answered = True
         return ChatResponse(response=bot_response)
     finally:
-        log_question(request.message, answered)
+        log_question(chat_request.message, answered)
+@app.post("/api/chat/stream")
+
+@limiter.limit("10/minute")
+async def chat_stream(request: Request, chat_request: ChatRequest):
+    def generate():
+        for token in get_response_stream(
+            user_message=chat_request.message,
+            conversation_history=chat_request.conversation_history,
+        ):
+            yield token
+
+    log_question(chat_request.message, True)
+    return StreamingResponse(generate(), media_type="text/plain")
+
+class FeedbackRequest(BaseModel):
+    question: str
+    answer: str
+    rating: str
+
+
+@app.post("/api/feedback")
+async def feedback(request: FeedbackRequest):
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "question": request.question,
+        "answer": request.answer,
+        "rating": request.rating,
+    }
+    with open(FEEDBACK_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+    return {"status": "ok"}
 
 
 @app.get("/api/documents")
@@ -110,7 +154,6 @@ async def stats():
     }
 
 
-# Health check — useful for verifying the server is running
 @app.get("/health")
 async def health():
     return {"status": "ok"}
