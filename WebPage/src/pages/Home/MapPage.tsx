@@ -5,25 +5,27 @@ import { TopNav } from "../../components/layout/TopNav/TopNav";
 import Footer from "../../components/layout/Footer/Footer";
 import Map from "../../components/map/Map";
 import logoSrc from "../../assets/logo.png";
+import PopularBuildings from "../../components/map/PopularBuildings";
+import { buildings } from "../../components/Document/buildings";
+import type { Building } from "../../components/Document/buildings";
 
 export interface MapPageProps {
   theme: "light" | "dark";
   onToggleTheme: () => void;
 }
 
-export interface Building {
-  id: number;
-  name: string;
-  description: string;
-  workingHours: string;
-  services: string[];
-  position: [number, number];
-}
-
 export default function MapPage({ theme, onToggleTheme }: MapPageProps) {
   const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
 
+const popularBuildings: Building[] = [
+  buildings.find((b) => b.name === "KTU Biblioteka"),
+  buildings.find((b) => b.name === "KTU Santakos Slėnis"),
+  buildings.find((b) => b.name === "KTU Sporto Centras"),
+  buildings.find((b) => b.name === "KTU 11 rūmai"),
+].filter((building): building is Building => Boolean(building));
+
   return (
+    <>
     <MapLayout
       header={
         <Header
@@ -95,7 +97,14 @@ export default function MapPage({ theme, onToggleTheme }: MapPageProps) {
         </div>
       }
       rightMain={<Map onSelectBuilding={setSelectedBuilding} />}
-      footer={<Footer />}
     />
+      <main className="container" style={{ paddingBottom: 40 }}>
+      <PopularBuildings
+        buildings={popularBuildings}
+        onSelectBuilding={setSelectedBuilding}
+    />
+    </main>
+    <Footer />
+    </>
   );
 }

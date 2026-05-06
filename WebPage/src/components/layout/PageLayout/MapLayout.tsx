@@ -21,7 +21,13 @@ export default function MapLayout({
       <a className="skip-link" href="#main">Skip to main content</a>
 
       {/* Header and TopNav */}
-      <div className="appbar">
+      <div
+        className="appbar"
+        style={{
+          position: "relative",
+          zIndex: 1000,
+        }}
+      >
         <div className="container appbar-inner">
           {header}
           {topNav}
