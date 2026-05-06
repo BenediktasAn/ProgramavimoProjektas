@@ -18,6 +18,16 @@ export default function DocumentList({ onSelect }: DocumentListProps) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
 
+    const handleDownload = (fileName: string) => {
+        // Vite serves files from src/assets as /src/assets/...
+        const link = document.createElement("a");
+        link.href = `/src/assets/documents/${fileName}`;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     useEffect(() => {
         fetch("/api/documents")
             .then((res) => res.json())
@@ -31,15 +41,6 @@ export default function DocumentList({ onSelect }: DocumentListProps) {
             });
     }, []);
 
-    const handleDownload = (fileName: string) => {
-        // This will trigger download from the backend
-        const link = document.createElement("a");
-        link.href = `/api/documents/${fileName}`;        // Uses Vite proxy
-        link.download = fileName;                    // Forces download with original name
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
 
     return (
         <div className="document-list">

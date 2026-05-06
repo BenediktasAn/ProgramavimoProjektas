@@ -1515,3 +1515,133 @@ footer { padding: var(--sp-6) 0 var(--sp-7); color: var(--text-secondary); }
   overflow: hidden;
   box-shadow: 0 4px 10px rgba(0,0,0,0.35);
 }
+
+.input:focus-visible {
+  outline: 1px solid #000;
+  outline-offset: 1px;
+  border-radius: 14px;
+  z-index: 1;
+}
+
+.container--full {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding-left: var(--sp-6);
+  padding-right: var(--sp-6);
+}
+
+
+/* ====================== RESPONSIVE IMPROVEMENTS ====================== */
+
+@media (max-width: 1024px) {
+  .hero-layout,
+  .hero-layout.docs-layout {
+    grid-template-columns: 1fr !important;
+    gap: var(--sp-5);
+  }
+
+  .document-list, .panel {
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding-left: var(--sp-4);
+    padding-right: var(--sp-4);
+  }
+
+  .appbar-inner {
+    flex-direction: column;
+    gap: var(--sp-3);
+    padding: var(--sp-3) 0;
+  }
+
+  .nav {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--sp-2);
+  }
+
+  .nav a {
+    padding: 8px 12px;
+    font-size: 0.95rem;
+  }
+
+  .chat-history {
+    max-height: 320px;
+  }
+
+  .chat {
+    max-height: none;
+    padding: var(--sp-4);
+  }
+
+  .document-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 0;
+  }
+
+  .document-info {
+    max-width: 100%;
+  }
+
+  .document-actions {
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .download-btn {
+    padding: 10px 20px;
+    font-size: 0.95rem;
+  }
+
+  /* Document Preview */
+  .panel object {
+    min-height: 500px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero {
+    padding: var(--sp-4);
+    border-radius: var(--radius-20);
+  }
+
+  h1 { font-size: var(--fs-600); }
+  h2 { font-size: var(--fs-500); }
+
+  .document-list {
+    padding: var(--sp-4);
+  }
+
+  .chat-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .chat-tabs {
+    flex-wrap: wrap;
+  }
+}
+
+/* Make sure long text wraps everywhere */
+.document-name, .chat-history-item-title {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+/* Better touch targets on mobile */
+button, a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
