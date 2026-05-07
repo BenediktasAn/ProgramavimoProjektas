@@ -8,36 +8,23 @@ export interface HeaderProps {
   theme?: "light" | "dark";
 }
 
-
-
 export default function Header({
   title = "askKTU",
   logo,
 }: HeaderProps) {
   return (
-    <>
-      <div>
-        <div className="cluster">
-          <h1>{title}</h1>
-          {logo ? (
-            <a href="/" aria-label="Home">
-              <img
-                src={logo.src}
-                alt={logo.alt}
-                style={{
-                  height: 62,
-                  width: "auto",
-                  display: "block",
-                  borderRadius: 8,
-                }}
-              />
-            </a>
-          ) : (
-            <h1>{title}</h1>
-          )}
-        </div>
-      </div>
-        
-    </>
+    <div className="header-brand">
+      {logo ? (
+        <a href="/" className="header-logo-link" aria-label={title}>
+          <img
+            src={logo.src}
+            alt={logo.alt}
+            className="header-logo-img"
+          />
+        </a>
+      ) : (
+        <h1 className="header-title-fallback">{title}</h1>
+      )}
+    </div>
   );
 }
