@@ -180,13 +180,12 @@ def get_response(user_message: str, conversation_history: list):
         f"[Source: {doc.metadata.get('source', 'unknown')}, Page: {doc.metadata.get('page', '?')}]\n{doc.page_content}"
         for doc in results
     ])
-v
 
     # Call LLM
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=messages,
-        temperature=0.3,q
+        temperature=0.3,
         max_tokens=500,
     )
 
