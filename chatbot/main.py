@@ -13,6 +13,7 @@ from .chatbot import get_response, get_response_stream
 
 DOCUMENTS_DIR = os.path.join(os.path.dirname(__file__), "documents")
 LOG_FILE = os.path.join(os.path.dirname(__file__), "questions.log")
+FEEDBACK_FILE = os.path.join(os.path.dirname(__file__), "feedback.log")
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -83,6 +84,25 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
 
     log_question(chat_request.message, True)
     return StreamingResponse(generate(), media_type="text/plain")
+
+class FeedbackRequest(BaseModel):
+    question: str
+    answer: str
+    rating: str
+
+
+@app.post("/api/feedback")
+async def feedback(request: FeedbackRequest):
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "question": request.question,
+        "answer": request.answer,
+        "rating": request.rating,
+    }
+    with open(FEEDBACK_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+    return {"status": "ok"}
+
 
 @app.get("/api/documents")
 async def documents():

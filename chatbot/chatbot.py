@@ -180,27 +180,13 @@ def get_response(user_message: str, conversation_history: list):
         f"[Source: {doc.metadata.get('source', 'unknown')}, Page: {doc.metadata.get('page', '?')}]\n{doc.page_content}"
         for doc in results
     ])
-
-    # Add confidence note
-    confidence_note = ""
-    if confidence < 40:
-        confidence_note = "\n\nNote: The available documents may not contain relevant information for this question. If unsure, advise the student to contact the student office."
-    elif confidence < 60:
-        confidence_note = "\n\nNote: The relevance of the found documents is moderate. Please indicate if you are not fully certain about the answer."
-
-    # Build messages
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages.extend(conversation_history)
-    messages.append({
-        "role": "user",
-        "content": f"Context from university documents:\n{context}{confidence_note}\n\nStudent question: {user_message}",
-    })
+v
 
     # Call LLM
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=messages,
-        temperature=0.3,
+        temperature=0.3,q
         max_tokens=500,
     )
 
@@ -257,8 +243,10 @@ def get_response_stream(user_message: str, conversation_history: list):
         for doc in results
     ])
 
+    prior_history = conversation_history[:-1][-10:]
+
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages.extend(conversation_history)
+    messages.extend(prior_history)
     messages.append({
         "role": "user",
         "content": f"Context from university documents:\n{context}\n\nStudent question: {user_message}",

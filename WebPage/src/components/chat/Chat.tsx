@@ -1,7 +1,19 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import ReactMarkdown from "react-markdown";
+import type { Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeSanitize from "rehype-sanitize";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
+import type { NormalizedCitation } from "./normalizeCitations";
+import { extractCitationsFromAnswer } from "./extractCitationsFromAnswer";
+import { localizeCitationParagraphLabel, localizeCitationTitle } from "./localizeCitation";
+import { useLocale } from "../../i18n/LocaleContext";
 
-const CHATBOT_NAME = "askKTU Chatbot";
+export type { NormalizedCitation };
+
 const API_URL = import.meta.env.VITE_API_URL ?? "";
+const MarkdownCodeHighlighter = SyntaxHighlighter as unknown as ComponentType<Record<string, unknown>>;
 
 type ChatRole = "user" | "assistant";
 
@@ -10,6 +22,8 @@ export interface ChatMessage {
   role: ChatRole;
   text: string;
   timestamp: number;
+  /** RAG / retrieval sources for assistant replies (optional until API returns them). */
+  citations?: NormalizedCitation[];
   meta?: {
     kind?: "error";
     retryUserText?: string;
@@ -23,36 +37,98 @@ export interface ChatProps {
   onMessagesChange: (messages: ChatMessage[]) => void;
 }
 
-function formatMessageTime(ms: number): string {
+function formatMessageTime(ms: number, localeTag: string): string {
   const d = new Date(ms);
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString(localeTag, { hour: "2-digit", minute: "2-digit" });
 }
 
+function getLatestAssistantCitations(messages: ChatMessage[]): NormalizedCitation[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role === "assistant" && m.meta?.kind !== "error") {
+      return m.citations ?? [];
+    }
+  }
+  return [];
+}
+
+const TITLE_TRUNCATE = 50;
+
+function createMarkdownComponents(): Components {
+  return {
+    code({ className, children, ...props }) {
+      const match = /language-(\w+)/.exec(className ?? "");
+      const code = String(children).replace(/\n$/, "");
+      const isCodeBlock = Boolean(match?.[1]) || code.includes("\n");
+      if (isCodeBlock) {
+        return (
+          <MarkdownCodeHighlighter
+            style={oneLight}
+            language={match?.[1] ?? "text"}
+            PreTag="div"
+            className="chat-markdown-codeblock"
+            {...props}
+          >
+            {code}
+          </MarkdownCodeHighlighter>
+        );
+      }
+      return (
+        <code className={`chat-markdown-inline-code ${className ?? ""}`} {...props}>
+          {children}
+        </code>
+      );
+    },
+    a({ ...props }) {
+      return <a {...props} target="_blank" rel="noopener noreferrer" />;
+    },
+  };
+}
+
+type ChatWidgetTab = "chat" | "sources";
 
 export default function Chat({
   sessionId,
   messages,
   onMessagesChange,
 }: ChatProps) {
+  const { t, locale } = useLocale();
+  const dateLocaleTag = locale === "lt" ? "lt-LT" : "en-GB";
+  const markdownComponents = useMemo(() => createMarkdownComponents(), []);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isOnline] = useState(true);
+  const [feedback, setFeedback] = useState<Record<string, "up" | "down">>({});
+  const [activeTab, setActiveTab] = useState<ChatWidgetTab>("chat");
+  const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
 
+  const latestSources = useMemo(
+    () => getLatestAssistantCitations(messages),
+    [messages],
+  );
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, activeTab]);
 
   useEffect(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     setIsLoading(false);
     setInput("");
+    setActiveTab("chat");
   }, [sessionId]);
+
+  useEffect(() => {
+    if (sessionId !== null && !isLoading) {
+      inputRef.current?.focus();
+    }
+  }, [sessionId, isLoading]);
 
   const handleStop = () => {
     abortControllerRef.current?.abort();
@@ -95,7 +171,7 @@ export default function Chat({
         role: m.role,
         content: m.text,
       }));
-      const endpoint = API_URL ? `${API_URL}/api/chat` : "/api/chat";
+      const endpoint = API_URL ? `${API_URL}/api/chat/stream` : "/api/chat/stream";
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -103,18 +179,78 @@ export default function Chat({
         body: JSON.stringify({ message: userText, conversation_history: history }),
       });
       if (!res.ok) {
-        throw new Error(`Chat request failed: ${res.status}`);
+        let rateLimitMessage = "";
+        if (res.status === 429) {
+          try {
+            const maybeJson = (await res.json()) as { response?: string; detail?: string };
+            rateLimitMessage = maybeJson.response ?? maybeJson.detail ?? "";
+          } catch {
+            rateLimitMessage = (await res.text()).trim();
+          }
+        }
+        throw new Error(
+          res.status === 429
+            ? rateLimitMessage || t("chat.rateLimit")
+            : t("chat.requestFailed", { status: res.status }),
+        );
       }
-      const data = (await res.json()) as { response?: string };
+      if (!res.body) {
+        throw new Error(t("chat.streamBodyMissing"));
+      }
       if (controller.signal.aborted) return;
       if (sessionIdRef.current !== idAtSend) return;
-      const botMessage: ChatMessage = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        text: data.response ?? "(No response text from server.)",
-        timestamp: Date.now(),
-      };
-      onMessagesChange([...afterUser, botMessage]);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      const botMessageId = `assistant-${Date.now()}`;
+      let streamedText = "";
+      const baseTimestamp = Date.now();
+
+      // Add placeholder assistant bubble and then append stream chunks in-place.
+      onMessagesChange([
+        ...afterUser,
+        { id: botMessageId, role: "assistant", text: "", timestamp: baseTimestamp },
+      ]);
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (controller.signal.aborted) {
+          await reader.cancel().catch(() => {});
+          return;
+        }
+        if (sessionIdRef.current !== idAtSend) {
+          await reader.cancel().catch(() => {});
+          return;
+        }
+
+        const chunkText = decoder.decode(value, { stream: true });
+        if (!chunkText) continue;
+        streamedText += chunkText;
+        onMessagesChange([
+          ...afterUser,
+          {
+            id: botMessageId,
+            role: "assistant",
+            text: streamedText,
+            timestamp: baseTimestamp,
+          },
+        ]);
+      }
+
+      streamedText += decoder.decode();
+      const fallbackCitations = extractCitationsFromAnswer(streamedText);
+
+      onMessagesChange([
+        ...afterUser,
+        {
+          id: botMessageId,
+          role: "assistant",
+          text: streamedText || t("chat.noResponse"),
+          timestamp: baseTimestamp,
+          ...(fallbackCitations.length > 0 ? { citations: fallbackCitations } : {}),
+        },
+      ]);
     } catch (err) {
       // If the user cancels, don't show an error bubble.
       if (
@@ -124,10 +260,12 @@ export default function Chat({
         return;
       }
       if (sessionIdRef.current !== idAtSend) return;
+      const errMessage =
+        err instanceof Error && err.message ? err.message : t("chat.networkError");
       const errorMessage: ChatMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        text: "Sorry, I couldn't reach the server. Please try again.",
+        text: errMessage,
         timestamp: Date.now(),
         meta: { kind: "error", retryUserText: userText },
       };
@@ -159,6 +297,19 @@ export default function Chat({
     await sendMessage(retryUserText, baseMessages, { appendUserBubble: false });
   };
 
+  const sendFeedback = async (messageId: string, rating: "up" | "down", answer: string, messagesSnapshot: ChatMessage[]) => {
+    if (feedback[messageId]) return;
+    setFeedback((prev) => ({ ...prev, [messageId]: rating }));
+    const idx = messagesSnapshot.findIndex((m) => m.id === messageId);
+    const question = idx > 0 ? messagesSnapshot[idx - 1].text : "";
+    const endpoint = API_URL ? `${API_URL}/api/feedback` : "/api/feedback";
+    await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, answer, rating }),
+    }).catch(() => {});
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -166,14 +317,38 @@ export default function Chat({
     }
   };
 
+  const lastAssistantId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && m.meta?.kind !== "error") return m.id;
+    }
+    return null;
+  }, [messages]);
+
+  const handleTabsKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveTab("sources");
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveTab("chat");
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      setActiveTab("chat");
+    } else if (e.key === "End") {
+      e.preventDefault();
+      setActiveTab("sources");
+    }
+  };
+
   return (
-    <section className="chat" aria-label="Chat" aria-busy={isLoading}>
+    <section className="chat" aria-label={t("chat.ariaLabel")} aria-busy={isLoading}>
       <header className="chat-header">
         <div className="chat-header-main">
           <div
             className="chat-header-avatar"
             role="img"
-            aria-label="Chatbot avatar"
+            aria-label={t("chat.botAvatar")}
           >
             <svg
               width="18"
@@ -186,7 +361,7 @@ export default function Chat({
             </svg>
           </div>
           <div className="chat-header-text">
-            <div className="chat-header-name">{CHATBOT_NAME}</div>
+            <div className="chat-header-name">{t("chat.botName")}</div>
             <div className="chat-header-status">
               <span
                 className={
@@ -198,26 +373,64 @@ export default function Chat({
                 aria-hidden="true"
               />
               <span className="chat-header-status-label">
-                {isOnline ? "Online & Ready" : "Offline & Unavailable"}
+                {isOnline ? t("chat.online") : t("chat.offline")}
               </span>
             </div>
           </div>
         </div>
       </header>
 
-      <div
-        ref={listRef}
-        className="chat-messages"
-        role="log"
-        aria-label="Chat message list"
-        aria-live="polite"
-        tabIndex={0}
-      >
+      <div className="chat-body">
+        <div
+          className="chat-tabs"
+          role="tablist"
+          aria-label={t("chat.tablistAria")}
+          onKeyDown={handleTabsKeyDown}
+        >
+          <button
+            type="button"
+            className="chat-tab"
+            role="tab"
+            id="chat-tab-chat"
+            aria-selected={activeTab === "chat"}
+            aria-controls="chat-tabpanel-chat"
+            tabIndex={activeTab === "chat" ? 0 : -1}
+            onClick={() => setActiveTab("chat")}
+          >
+            {t("chat.tabChat")}
+          </button>
+          <button
+            type="button"
+            className="chat-tab"
+            role="tab"
+            id="chat-tab-sources"
+            aria-selected={activeTab === "sources"}
+            aria-controls="chat-tabpanel-sources"
+            tabIndex={activeTab === "sources" ? 0 : -1}
+            onClick={() => setActiveTab("sources")}
+          >
+            {t("chat.tabSources")}
+          </button>
+        </div>
+
+        <div
+          id="chat-tabpanel-chat"
+          className="chat-tabpanel-chat"
+          role="tabpanel"
+          aria-labelledby="chat-tab-chat"
+          hidden={activeTab !== "chat"}
+        >
+          <div
+            ref={listRef}
+            className="chat-messages"
+            role="log"
+            aria-label={t("chat.messagesAria")}
+            aria-live="polite"
+            tabIndex={0}
+          >
         {messages.length === 0 && !isLoading && (
           <p className="chat-messages-empty" aria-live="polite">
-            {sessionId === null
-              ? "Create a new chat or pick one from the list to get started."
-              : "Start a conversation"}
+            {sessionId === null ? t("chat.emptyNoSession") : t("chat.emptyStart")}
           </p>
         )}
         {messages.map((message) => (
@@ -229,7 +442,7 @@ export default function Chat({
               <div
                 className="chat-message-avatar chat-message-avatar--assistant"
                 role="img"
-                aria-label="Chatbot avatar"
+                aria-label={t("chat.botAvatar")}
               >
                 <svg
                   width="16"
@@ -244,7 +457,7 @@ export default function Chat({
             )}
             <div className="chat-message-body">
               {message.role === "assistant" && (
-                <div className="chat-message-name">{CHATBOT_NAME}</div>
+                <div className="chat-message-name">{t("chat.botName")}</div>
               )}
               <div
                 className={
@@ -270,7 +483,20 @@ export default function Chat({
                     </svg>
                   </span>
                 )}
-                <span>{message.text}</span>
+                {message.meta?.kind === "error" ? (
+                  <span>{message.text}</span>
+                ) : (
+                  <div className="chat-markdown">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeSanitize]}
+                      skipHtml
+                      components={markdownComponents}
+                    >
+                      {message.text}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
               {message.meta?.kind === "error" && (
                 <div className="chat-error-actions">
@@ -280,7 +506,7 @@ export default function Chat({
                     onClick={() => handleRetry(message.id)}
                     disabled={isLoading}
                   >
-                    Retry
+                    {t("chat.retry")}
                   </button>
                 </div>
               )}
@@ -288,14 +514,32 @@ export default function Chat({
                 className="chat-message-time"
                 dateTime={new Date(message.timestamp).toISOString()}
               >
-                {formatMessageTime(message.timestamp)}
+                {formatMessageTime(message.timestamp, dateLocaleTag)}
               </time>
+              {message.role === "assistant" && message.meta?.kind !== "error" && (
+                <div className="chat-feedback">
+                  <button
+                    type="button"
+                    className={`chat-feedback-btn${feedback[message.id] === "up" ? " chat-feedback-btn--selected" : ""}`}
+                    disabled={!!feedback[message.id]}
+                    aria-label={t("chat.feedbackHelpful")}
+                    onClick={() => sendFeedback(message.id, "up", message.text, messages)}
+                  >👍</button>
+                  <button
+                    type="button"
+                    className={`chat-feedback-btn${feedback[message.id] === "down" ? " chat-feedback-btn--selected" : ""}`}
+                    disabled={!!feedback[message.id]}
+                    aria-label={t("chat.feedbackNotHelpful")}
+                    onClick={() => sendFeedback(message.id, "down", message.text, messages)}
+                  >👎</button>
+                </div>
+              )}
             </div>
             {message.role === "user" && (
               <div
                 className="chat-message-avatar chat-message-avatar--user"
                 role="img"
-                aria-label="User avatar"
+                aria-label={t("chat.userAvatar")}
               >
                 <svg
                   width="16"
@@ -313,36 +557,120 @@ export default function Chat({
         {isLoading && (
           <div className="chat-message chat-message--assistant">
             <div className="chat-message-body">
-              <div className="chat-message-name">{CHATBOT_NAME}</div>
-              <div className="chat-message-text">Thinking...</div>
+              <div className="chat-message-name">{t("chat.botName")}</div>
+              <div className="chat-message-text">{t("chat.thinking")}</div>
             </div>
           </div>
         )}
         <div ref={messagesEndRef} aria-hidden="true" />
+          </div>
+        </div>
+
+        <div
+          id="chat-tabpanel-sources"
+          className="chat-sources-panel"
+          role="tabpanel"
+          aria-labelledby="chat-tab-sources"
+          hidden={activeTab !== "sources"}
+        >
+          <p key={lastAssistantId ?? "none"} className="visually-hidden" aria-live="polite">
+            {latestSources.length === 0
+              ? t("chat.sourcesEmptySr")
+              : t("chat.sourcesUpdatedSr", { count: latestSources.length })}
+          </p>
+          {latestSources.length === 0 ? (
+            <p className="chat-sources-empty" role="status">
+              {t("chat.sourcesEmpty")}
+            </p>
+          ) : (
+            <ul className="chat-sources-list" aria-label={t("chat.sourcesListAria")}>
+              {latestSources.map((c, i) => {
+                const titleFull = localizeCitationTitle(c.documentTitle, t);
+                const paraDisplay = localizeCitationParagraphLabel(c.paragraphLabel, t);
+                const titleTrunc =
+                  titleFull.length > TITLE_TRUNCATE
+                    ? `${titleFull.slice(0, TITLE_TRUNCATE)}…`
+                    : titleFull;
+                const titleId = `chat-source-title-${i}`;
+                return (
+                  <li key={`${c.documentTitle}-${c.paragraphLabel}-${i}`} className="chat-sources-item">
+                    <div className="chat-source-block" aria-labelledby={titleId}>
+                      <h3
+                        id={titleId}
+                        className="chat-source-doc-title"
+                        title={titleFull.length >= TITLE_TRUNCATE ? titleFull : undefined}
+                      >
+                        {titleTrunc}
+                      </h3>
+                      <p className="chat-source-para-ref">{paraDisplay}</p>
+                      {c.snippet ? (
+                        <p className="chat-source-snippet">{c.snippet}</p>
+                      ) : null}
+                      <div className="chat-source-link-row">
+                        {c.url && !c.linkInvalid ? (
+                          <a
+                            className="chat-source-link"
+                            href={c.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {t("chat.openDocument")}
+                          </a>
+                        ) : c.linkInvalid ? (
+                          <span className="chat-source-link-broken">
+                            <span className="chat-source-warn-icon" aria-hidden="true">
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                <line x1="12" y1="9" x2="12" y2="13" />
+                                <line x1="12" y1="17" x2="12.01" y2="17" />
+                              </svg>
+                            </span>
+                            <span>{t("chat.linkUnavailable")}</span>
+                            <span className="visually-hidden">{t("chat.linkInvalidSr")}</span>
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
 
       <div className="ask">
         <label htmlFor="chat-input" className="visually-hidden">
-          Message to chatbot
+          {t("chat.inputLabel")}
         </label>
         <input
+          ref={inputRef}
           id="chat-input"
           type="text"
           className="input"
-          placeholder="Type your message..."
+          placeholder={t("chat.inputPlaceholder")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={isLoading || sessionId === null}
-          aria-label="Message to chatbot"
+          aria-label={t("chat.inputLabel")}
         />
         {isLoading && (
           <button
             type="button"
             className="chat-stop"
             onClick={handleStop}
-            aria-label="Stop generating"
-            title="Stop generating"
+            aria-label={t("chat.stopAria")}
+            title={t("chat.stopTitle")}
           >
             <svg
               width="20"
@@ -366,7 +694,7 @@ export default function Chat({
           className="chat-send"
           onClick={handleSend}
           disabled={!input.trim() || isLoading || sessionId === null}
-          aria-label="Send message"
+          aria-label={t("chat.sendAria")}
         >
           <svg
             width="20"

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLocale } from "../../../i18n/LocaleContext";
 
 export interface PageLayoutProps {
   header: ReactNode;
@@ -15,10 +16,11 @@ export default function PageLayout({
   rightMain,
   footer
 }: PageLayoutProps) {
+  const { t } = useLocale();
   return (
     <>
       {/* Accessibility: skip to main */}
-      <a className="skip-link" href="#main">Skip to main content</a>
+      <a className="skip-link" href="#main">{t("layout.skipToMain")}</a>
 
       {/* App bar */}
       <div className="appbar">
@@ -29,16 +31,16 @@ export default function PageLayout({
       </div>
 
       {/* Main section – uses your hero + hero-layout */}
-      <main id="main" className="container" aria-label="Main content" style={{ paddingTop: 24, paddingBottom: 24 }}>
+      <main id="main" className="container" aria-label={t("layout.mainAria")} style={{ paddingTop: 24, paddingBottom: 24 }}>
         <section className="hero">
           <div className="hero-layout">
             {/* Left column (320px on desktop per CSS) */}
-            <div aria-label="Left column">
+            <div aria-label={t("layout.leftAria")}>
               {leftColumn}
             </div>
 
             {/* Right (1fr) main content */}
-            <div aria-label="Primary content">
+            <div aria-label={t("layout.primaryAria")}>
               {rightMain}
             </div>
           </div>
