@@ -25,7 +25,7 @@ export default function DocumentPreview({ fileName }: DocumentPreviewProps) {
             <strong>{fileName}</strong>
 
             <object
-                data={`/api/documents/${fileName}`}
+                data={`/src/assets/documents/${fileName}`}
                 type="application/pdf"
                 style={{ flex: 1, width: "100%" }}
             />
