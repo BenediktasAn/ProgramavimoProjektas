@@ -55,6 +55,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+    confidence: int = 100
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -62,12 +63,12 @@ class ChatResponse(BaseModel):
 async def chat(request: Request, chat_request: ChatRequest):
     answered = False
     try:
-        bot_response = get_response(
+        answer, confidence = get_response(
             user_message=chat_request.message,
             conversation_history=chat_request.conversation_history,
         )
         answered = True
-        return ChatResponse(response=bot_response)
+        return ChatResponse(response=answer, confidence=confidence)
     finally:
         log_question(chat_request.message, answered)
 @app.post("/api/chat/stream")

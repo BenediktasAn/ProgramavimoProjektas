@@ -97,66 +97,130 @@ def is_prompt_injection(message: str) -> bool:
             return True
     return False
 
+def rephrase_question(user_message: str) -> str:
+    """Ask the LLM to rephrase the question for better search results."""
+    rephrase_response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": "Rephrase the following question using different keywords to help search university documents. Return ONLY the rephrased question, nothing else."},
+            {"role": "user", "content": user_message},
+        ],
+        temperature=0.3,
+        max_tokens=100,
+    )
+    return rephrase_response.choices[0].message.content.strip()
 
-def get_response(user_message: str, conversation_history: list) -> str:
+def get_response(user_message: str, conversation_history: list):
+    # Check message length
+    if len(user_message) > 500:
+        return "Your message is too long. Please keep your question under 500 characters.", 0
+
     # Check for prompt injection
     if is_prompt_injection(user_message):
-        return "I'm a KTU university assistant and can only help with university-related questions."
+        return "I'm a KTU university assistant and can only help with university-related questions.", 0
 
-    # Check cache (only for questions without conversation history)
+    # Check cache
     cache_key = get_cache_key(user_message)
     if not conversation_history and cache_key in response_cache:
         return response_cache[cache_key]
 
-    # RAG: Search for relevant document chunks with deduplication
-    raw_results = vectorstore.similarity_search(user_message, k=10)
+    # RAG: Search with scores
+    raw_results = vectorstore.similarity_search_with_score(user_message, k=10)
 
+    # Deduplicate
     seen = set()
     results = []
-    for doc in raw_results:
+    scores = []
+    for doc, score in raw_results:
         content_key = doc.page_content.strip()[:200]
         if content_key not in seen:
             seen.add(content_key)
             results.append(doc)
+            scores.append(score)
         if len(results) == 5:
             break
 
+    # Calculate confidence
+    if scores:
+        best_score = scores[0]
+        confidence = max(0, min(100, round((25 - best_score) / 15 * 100)))
+    else:
+        confidence = 0
+
+    # If confidence is low, try rephrasing the question
+    if confidence < 40:
+        rephrased = rephrase_question(user_message)
+        retry_results = vectorstore.similarity_search_with_score(rephrased, k=10)
+
+        retry_seen = set()
+        retry_docs = []
+        retry_scores = []
+        for doc, score in retry_results:
+            content_key = doc.page_content.strip()[:200]
+            if content_key not in retry_seen:
+                retry_seen.add(content_key)
+                retry_docs.append(doc)
+                retry_scores.append(score)
+            if len(retry_docs) == 5:
+                break
+
+        if retry_scores:
+            retry_confidence = max(0, min(100, round((25 - retry_scores[0]) / 15 * 100)))
+        else:
+            retry_confidence = 0
+
+        # Use rephrased results if they're better
+        if retry_confidence > confidence:
+            results = retry_docs
+            scores = retry_scores
+            confidence = retry_confidence
+
+    # Build context
     context = "\n\n".join([
         f"[Source: {doc.metadata.get('source', 'unknown')}, Page: {doc.metadata.get('page', '?')}]\n{doc.page_content}"
         for doc in results
     ])
+v
 
-    # Exclude the last entry (current user message re-added below with context), keep last 5 pairs
-    prior_history = conversation_history[:-1][-10:]
-
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages.extend(prior_history)
-    messages.append({
-        "role": "user",
-        "content": f"Context from university documents:\n{context}\n\nStudent question: {user_message}",
-    })
-
+    # Call LLM
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=messages,
-        temperature=0.3,
+        temperature=0.3,q
         max_tokens=500,
     )
 
     answer = response.choices[0].message.content
 
-    # Save to cache (only for questions without conversation history)
+    # Adjust confidence based on LLM's response
+    no_info_phrases = [
+        "don't have information",
+        "neturiu informacijos",
+        "contact the student office",
+        "susisiekite",
+        "not covered",
+        "not mentioned",
+        "no information",
+    ]
+    if any(phrase in answer.lower() for phrase in no_info_phrases):
+        confidence = min(confidence, 20)
+
+    # Save to cache
     if not conversation_history:
         if len(response_cache) >= CACHE_MAX_SIZE:
             oldest_key = next(iter(response_cache))
             del response_cache[oldest_key]
-        response_cache[cache_key] = answer
+        response_cache[cache_key] = (answer, confidence)
 
-    return answer
+    return answer, confidence
 
 
 def get_response_stream(user_message: str, conversation_history: list):
     # Check for prompt injection
+       # Check message length
+    if len(user_message) > 500:
+        yield "Your message is too long. Please keep your question under 500 characters."
+        return
     if is_prompt_injection(user_message):
         yield "I'm a KTU university assistant and can only help with university-related questions."
         return
