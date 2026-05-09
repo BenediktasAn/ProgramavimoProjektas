@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import datetime, timezone, date
 from fastapi import FastAPI, Request, UploadFile, File, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -85,7 +85,11 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
             yield token
 
     log_question(chat_request.message, True)
-    return StreamingResponse(generate(), media_type="text/plain")
+    return StreamingResponse(
+        generate(),
+        media_type="text/plain",
+        headers={"X-Accel-Buffering": "no"},
+    )
 
 class FeedbackRequest(BaseModel):
     question: str
@@ -116,6 +120,17 @@ async def documents():
             size_str = f"{round(size_bytes / 1024)} KB" if size_bytes < 1024 * 1024 else f"{round(size_bytes / (1024 * 1024), 1)} MB"
             files.append({"name": filename, "size": size_str})
     return files
+
+
+@app.get("/api/documents/{filename}")
+async def serve_document(filename: str):
+    if not filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are served")
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(DOCUMENTS_DIR, safe_name)
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Document not found")
+    return FileResponse(file_path, media_type="application/pdf", filename=safe_name)
 
 
 @app.get("/api/stats")

@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import hashlib
 from pathlib import Path
 from groq import Groq
@@ -181,6 +182,14 @@ def get_response(user_message: str, conversation_history: list):
         for doc in results
     ])
 
+    prior_history = conversation_history[:-1][-10:]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages.extend(prior_history)
+    messages.append({
+        "role": "user",
+        "content": f"Context from university documents:\n{context}\n\nStudent question: {user_message}",
+    })
+
     # Call LLM
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -216,7 +225,7 @@ def get_response(user_message: str, conversation_history: list):
 
 def get_response_stream(user_message: str, conversation_history: list):
     # Check for prompt injection
-       # Check message length
+    # Check message length
     if len(user_message) > 500:
         yield "Your message is too long. Please keep your question under 500 characters."
         return
@@ -224,23 +233,65 @@ def get_response_stream(user_message: str, conversation_history: list):
         yield "I'm a KTU university assistant and can only help with university-related questions."
         return
 
-    # RAG: Search for relevant document chunks with deduplication
-    raw_results = vectorstore.similarity_search(user_message, k=10)
+    # RAG: Search with scores for confidence calculation
+    raw_results = vectorstore.similarity_search_with_score(user_message, k=10)
 
     seen = set()
     results = []
-    for doc in raw_results:
+    scores = []
+    for doc, score in raw_results:
         content_key = doc.page_content.strip()[:200]
         if content_key not in seen:
             seen.add(content_key)
             results.append(doc)
+            scores.append(score)
         if len(results) == 5:
             break
+
+    # Calculate confidence
+    if scores:
+        confidence = max(0, min(100, round((25 - scores[0]) / 15 * 100)))
+    else:
+        confidence = 0
+
+    # If confidence is low, try rephrasing the question
+    if confidence < 40:
+        rephrased = rephrase_question(user_message)
+        retry_raw = vectorstore.similarity_search_with_score(rephrased, k=10)
+
+        retry_seen = set()
+        retry_docs = []
+        retry_scores = []
+        for doc, score in retry_raw:
+            content_key = doc.page_content.strip()[:200]
+            if content_key not in retry_seen:
+                retry_seen.add(content_key)
+                retry_docs.append(doc)
+                retry_scores.append(score)
+            if len(retry_docs) == 5:
+                break
+
+        if retry_scores:
+            retry_confidence = max(0, min(100, round((25 - retry_scores[0]) / 15 * 100)))
+        else:
+            retry_confidence = 0
+
+        if retry_confidence > confidence:
+            results = retry_docs
+            scores = retry_scores
+            confidence = retry_confidence
 
     context = "\n\n".join([
         f"[Source: {doc.metadata.get('source', 'unknown')}, Page: {doc.metadata.get('page', '?')}]\n{doc.page_content}"
         for doc in results
     ])
+
+    # Send sources + confidence as first line so frontend can display them
+    sources = [
+        {"documentTitle": doc.metadata.get("source", "Unknown"), "paragraphLabel": f"Page {doc.metadata.get('page', '?')}"}
+        for doc in results
+    ]
+    yield json.dumps({"__sources__": sources, "__confidence__": confidence}) + "\n"
 
     prior_history = conversation_history[:-1][-10:]
 

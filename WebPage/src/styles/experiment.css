@@ -1335,6 +1335,34 @@ p, ul, ol {
   cursor: default;
 }
 
+.chat-confidence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  height: 14px;
+}
+
+.chat-confidence-bar {
+  display: block;
+  height: 4px;
+  max-width: 80px;
+  border-radius: 2px;
+  background: var(--confidence-color, #94a3b8);
+  transition: width 0.4s ease;
+}
+
+.chat-confidence-label {
+  font-size: 11px;
+  color: var(--confidence-color, #94a3b8);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chat-confidence--high { --confidence-color: #22c55e; }
+.chat-confidence--mid  { --confidence-color: #f59e0b; }
+.chat-confidence--low  { --confidence-color: #ef4444; }
+
 .chat-feedback {
   display: flex;
   gap: 4px;

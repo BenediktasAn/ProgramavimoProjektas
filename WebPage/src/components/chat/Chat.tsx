@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
-import type { NormalizedCitation } from "./normalizeCitations";
+import { normalizeCitations, type NormalizedCitation } from "./normalizeCitations";
 import { extractCitationsFromAnswer } from "./extractCitationsFromAnswer";
 import { localizeCitationParagraphLabel, localizeCitationTitle } from "./localizeCitation";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -24,6 +24,7 @@ export interface ChatMessage {
   timestamp: number;
   /** RAG / retrieval sources for assistant replies (optional until API returns them). */
   citations?: NormalizedCitation[];
+  confidence?: number;
   meta?: {
     kind?: "error";
     retryUserText?: string;
@@ -204,6 +205,9 @@ export default function Chat({
       const decoder = new TextDecoder();
       const botMessageId = `assistant-${Date.now()}`;
       let streamedText = "";
+      let sourceCitations: NormalizedCitation[] = [];
+      let streamConfidence: number | undefined;
+      let sourcesHeaderParsed = false;
       const baseTimestamp = Date.now();
 
       // Add placeholder assistant bubble and then append stream chunks in-place.
@@ -227,6 +231,26 @@ export default function Chat({
         const chunkText = decoder.decode(value, { stream: true });
         if (!chunkText) continue;
         streamedText += chunkText;
+
+        // Parse sources + confidence header line sent by backend before text stream
+        if (!sourcesHeaderParsed && streamedText.includes("\n")) {
+          const newlineIdx = streamedText.indexOf("\n");
+          const firstLine = streamedText.slice(0, newlineIdx);
+          try {
+            const parsed = JSON.parse(firstLine) as { __sources__?: unknown; __confidence__?: number };
+            if (parsed.__sources__) {
+              sourceCitations = normalizeCitations(parsed.__sources__);
+              if (typeof parsed.__confidence__ === "number") {
+                streamConfidence = parsed.__confidence__;
+              }
+              streamedText = streamedText.slice(newlineIdx + 1);
+              sourcesHeaderParsed = true;
+            }
+          } catch {
+            sourcesHeaderParsed = true;
+          }
+        }
+
         onMessagesChange([
           ...afterUser,
           {
@@ -234,12 +258,16 @@ export default function Chat({
             role: "assistant",
             text: streamedText,
             timestamp: baseTimestamp,
+            ...(sourceCitations.length > 0 ? { citations: sourceCitations } : {}),
+            ...(streamConfidence !== undefined ? { confidence: streamConfidence } : {}),
           },
         ]);
       }
 
       streamedText += decoder.decode();
-      const fallbackCitations = extractCitationsFromAnswer(streamedText);
+      const finalCitations = sourceCitations.length > 0
+        ? sourceCitations
+        : extractCitationsFromAnswer(streamedText);
 
       onMessagesChange([
         ...afterUser,
@@ -248,7 +276,8 @@ export default function Chat({
           role: "assistant",
           text: streamedText || t("chat.noResponse"),
           timestamp: baseTimestamp,
-          ...(fallbackCitations.length > 0 ? { citations: fallbackCitations } : {}),
+          ...(finalCitations.length > 0 ? { citations: finalCitations } : {}),
+          ...(streamConfidence !== undefined ? { confidence: streamConfidence } : {}),
         },
       ]);
     } catch (err) {
@@ -556,6 +585,17 @@ export default function Chat({
                   >
                     {t("chat.retry")}
                   </button>
+                </div>
+              )}
+              {message.role === "assistant" && message.meta?.kind !== "error" && message.confidence !== undefined && (
+                <div
+                  className={`chat-confidence chat-confidence--${
+                    message.confidence >= 70 ? "high" : message.confidence >= 40 ? "mid" : "low"
+                  }`}
+                  title={`Confidence score: ${message.confidence}%`}
+                >
+                  <span className="chat-confidence-bar" style={{ width: `${message.confidence}%` }} />
+                  <span className="chat-confidence-label">{message.confidence}%</span>
                 </div>
               )}
               <time
