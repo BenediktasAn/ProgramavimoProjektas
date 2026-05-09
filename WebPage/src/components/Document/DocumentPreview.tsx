@@ -1,3 +1,7 @@
+
+
+
+import { useEffect, useState } from "react";
 import { useLocale } from "../../i18n/LocaleContext";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
@@ -8,6 +12,44 @@ interface DocumentPreviewProps {
 
 export default function DocumentPreview({ fileName }: DocumentPreviewProps) {
     const { t } = useLocale();
+    const [objectUrl, setObjectUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(false);
+
+    useEffect(() => {
+        if (!fileName) {
+            setObjectUrl(null);
+            return;
+        }
+        setLoading(true);
+        setError(false);
+        let revoked = false;
+        fetch(`${API_URL}/api/documents/${encodeURIComponent(fileName)}`)
+            .then((res) => {
+                if (!res.ok) throw new Error("Failed to load");
+                return res.blob();
+            })
+            .then((blob) => {
+                if (revoked) return;
+                const url = URL.createObjectURL(blob);
+                setObjectUrl(url);
+                setLoading(false);
+            })
+            .catch(() => {
+                if (!revoked) {
+                    setError(true);
+                    setLoading(false);
+                }
+            });
+        return () => {
+            revoked = true;
+            setObjectUrl((prev) => {
+                if (prev) URL.revokeObjectURL(prev);
+                return null;
+            });
+        };
+    }, [fileName]);
+
     if (!fileName) {
         return (
             <div className="panel" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -15,8 +57,6 @@ export default function DocumentPreview({ fileName }: DocumentPreviewProps) {
             </div>
         );
     }
-
-    const pdfUrl = `${API_URL}/api/documents/${encodeURIComponent(fileName)}`;
 
     return (
         <div
@@ -29,11 +69,15 @@ export default function DocumentPreview({ fileName }: DocumentPreviewProps) {
                 overflow: "hidden",
             }}
         >
-            <iframe
-                src={pdfUrl}
-                title={fileName}
-                style={{ flex: 1, width: "100%", border: "none", borderRadius: "10px" }}
-            />
+            {loading && <p style={{ margin: "auto" }}>{t("documents.loading")}</p>}
+            {error && <p style={{ margin: "auto", color: "var(--error, red)" }}>{t("documents.error")}</p>}
+            {objectUrl && (
+                <iframe
+                    src={objectUrl}
+                    title={fileName}
+                    style={{ flex: 1, width: "100%", border: "none", borderRadius: "10px" }}
+                />
+            )}
         </div>
     );
 }
