@@ -72,7 +72,9 @@ export default function App() {
   );
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    const root = document.documentElement;
+    root.classList.remove("theme-light", "theme-dark");
+    root.classList.add(theme === "light" ? "theme-light" : "theme-dark");
   }, [theme]);
 
   useEffect(() => {
