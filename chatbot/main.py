@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import datetime, timezone, date
 from fastapi import FastAPI, Request, UploadFile, File, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse, Response
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -16,6 +16,19 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 DOCUMENTS_DIR = os.path.join(os.path.dirname(__file__), "documents")
 LOG_FILE = os.path.join(os.path.dirname(__file__), "questions.log")
 FEEDBACK_FILE = os.path.join(os.path.dirname(__file__), "feedback.log")
+METADATA_FILE = os.path.join(os.path.dirname(__file__), "documents_meta.json")
+
+
+def load_metadata() -> dict:
+    if os.path.exists(METADATA_FILE):
+        with open(METADATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def save_metadata(meta: dict) -> None:
+    with open(METADATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(meta, f, ensure_ascii=False, indent=2)
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -45,7 +58,7 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://askktu.online", "https://www.askktu.online", "http://localhost:8000"],
-    allow_methods=["POST", "GET"],
+    allow_methods=["POST", "GET", "DELETE"],
     allow_headers=["Content-Type", "X-Admin-Password"],
 )
 
@@ -112,13 +125,18 @@ async def feedback(request: FeedbackRequest):
 
 @app.get("/api/documents")
 async def documents():
+    meta = load_metadata()
     files = []
     for filename in os.listdir(DOCUMENTS_DIR):
         if filename.endswith(".pdf"):
             full_path = os.path.join(DOCUMENTS_DIR, filename)
             size_bytes = os.path.getsize(full_path)
             size_str = f"{round(size_bytes / 1024)} KB" if size_bytes < 1024 * 1024 else f"{round(size_bytes / (1024 * 1024), 1)} MB"
-            files.append({"name": filename, "size": size_str})
+            files.append({
+                "name": filename,
+                "size": size_str,
+                "category": meta.get(filename, {}).get("category", ""),
+            })
     return files
 
 
@@ -181,6 +199,7 @@ async def stats():
 async def admin_upload(
     file: UploadFile = File(...),
     x_admin_password: str = Header(...),
+    category: str = "",
 ):
     admin_password = os.getenv("ADMIN_PASSWORD", "")
     if not admin_password or x_admin_password != admin_password:
@@ -207,7 +226,86 @@ async def admin_upload(
         os.remove(save_path)
         raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
 
+    meta = load_metadata()
+    meta[file.filename] = {"category": category.strip()}
+    save_metadata(meta)
+
     return {"status": "ok", "filename": file.filename, "chunks": len(chunks)}
+
+
+@app.delete("/api/admin/documents/{filename}")
+async def delete_document(filename: str, x_admin_password: str = Header(...)):
+    admin_password = os.getenv("ADMIN_PASSWORD", "")
+    if not admin_password or x_admin_password != admin_password:
+        raise HTTPException(status_code=401, detail="Invalid admin password")
+
+    safe_name = os.path.basename(filename)
+    file_path = os.path.join(DOCUMENTS_DIR, safe_name)
+
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    # Remove chunks from vector store (source metadata is the full path set by PyPDFLoader)
+    chunks_deleted = 0
+    try:
+        vectorstore._collection.delete(where={"source": file_path})
+        chunks_deleted = 1  # ChromaDB doesn't return count on delete; flag success
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Vector store removal failed: {str(e)}")
+
+    os.remove(file_path)
+
+    meta = load_metadata()
+    meta.pop(safe_name, None)
+    save_metadata(meta)
+
+    return {"status": "ok", "filename": safe_name, "chunks_deleted": chunks_deleted}
+
+
+@app.get("/api/stats/export")
+async def export_stats():
+    import csv, io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["timestamp", "question", "answered"])
+    if os.path.exists(LOG_FILE):
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line)
+                    writer.writerow([
+                        entry.get("timestamp", ""),
+                        entry.get("question", ""),
+                        str(entry.get("answered", "")).lower(),
+                    ])
+                except json.JSONDecodeError:
+                    continue
+    today = date.today().isoformat()
+    filename = f"askktu-stats-{today}.csv"
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/admin/feedback")
+async def get_feedback(x_admin_password: str = Header(...)):
+    admin_password = os.getenv("ADMIN_PASSWORD", "")
+    if not admin_password or x_admin_password != admin_password:
+        raise HTTPException(status_code=401, detail="Invalid admin password")
+
+    entries = []
+    if os.path.exists(FEEDBACK_FILE):
+        with open(FEEDBACK_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+
+    entries.reverse()
+    return entries
 
 
 @app.get("/health")

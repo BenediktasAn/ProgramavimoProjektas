@@ -111,6 +111,10 @@ const en = {
   "documents.pdfType": "PDF Document",
   "documents.download": "Download",
   "documents.previewEmpty": "Select a document to preview",
+  "documents.categoryAll": "All",
+  "documents.categoryOther": "Other",
+  "documents.searchPlaceholder": "Search documents…",
+  "documents.noResults": "No documents found.",
 
   "stats.title": "Chatbot Statistics",
   "stats.subtitle": "Live usage data from the question log.",
@@ -240,6 +244,10 @@ const lt: Record<keyof typeof en, string> = {
   "documents.pdfType": "PDF dokumentas",
   "documents.download": "Atsisiųsti",
   "documents.previewEmpty": "Pasirinkite dokumentą peržiūrai",
+  "documents.categoryAll": "Visi",
+  "documents.categoryOther": "Kita",
+  "documents.searchPlaceholder": "Ieškoti dokumentų…",
+  "documents.noResults": "Dokumentų nerasta.",
 
   "stats.title": "Pokalbių roboto statistika",
   "stats.subtitle": "Naudojimo duomenys iš klausimų žurnalo.",
