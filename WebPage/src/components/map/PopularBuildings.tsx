@@ -10,74 +10,37 @@ export default function PopularBuildings({
   onSelectBuilding,
 }: PopularBuildingsProps) {
   return (
-    <section style={{ marginTop: "32px" }}>
-      <h2
-        style={{
-          marginBottom: "16px",
-          fontSize: "28px",
-          fontWeight: 700,
-        }}
-      >
+    <section className="popular-buildings">
+      <h2 className="popular-buildings-heading">
         Populiariausios vietos
       </h2>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-          gap: "16px",
-        }}
-      >
+      <div className="popular-buildings-grid">
         {buildings.map((building) => (
           <div
             key={building.id}
+            className="popular-building-card"
             onClick={() => onSelectBuilding(building)}
-            style={{
-              border: "1px solid #ddd",
-              borderRadius: "16px",
-              padding: "18px",
-              cursor: "pointer",
-              background: "white",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectBuilding(building);
+              }
             }}
           >
-            <h3
-              style={{
-                marginBottom: "10px",
-                fontSize: "20px",
-              }}
-            >
+            <h3 className="popular-building-card-title">
               {building.name}
             </h3>
 
-            <p
-              style={{
-                color: "#555",
-                fontSize: "14px",
-                lineHeight: 1.5,
-              }}
-            >
+            <p className="popular-building-card-desc">
               {building.description.slice(0, 120)}...
             </p>
 
-            <div
-              style={{
-                marginTop: "12px",
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "8px",
-              }}
-            >
+            <div className="popular-building-card-tags">
               {building.services.slice(0, 3).map((service, index) => (
-                <span
-                  key={index}
-                  style={{
-                    background: "#eef2ff",
-                    padding: "6px 10px",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                  }}
-                >
+                <span key={index} className="map-service-tag">
                   {service}
                 </span>
               ))}

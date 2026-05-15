@@ -6,11 +6,22 @@ import logoSrc from "../../assets/logo.png";
 import ChatStats from "../../components/Document/ChatStats";
 import { useLocale } from "../../i18n/LocaleContext";
 
-export default function StatsPage() {
+export interface StatsPageProps {
+    theme: "light" | "dark";
+    onToggleTheme: () => void;
+}
+
+export default function StatsPage({ theme, onToggleTheme }: StatsPageProps) {
     const { t } = useLocale();
     return (
         <PageLayoutDocs
-            header={<Header logo={{ src: logoSrc, alt: "askKTU logo" }} />}
+            header={
+                <Header
+                    logo={{ src: logoSrc, alt: "askKTU logo" }}
+                    theme={theme}
+                    onToggleTheme={onToggleTheme}
+                />
+            }
             topNav={<TopNav />}
             rightMain={
                 <section className="document-container">

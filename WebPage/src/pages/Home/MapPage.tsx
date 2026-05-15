@@ -59,15 +59,7 @@ const popularBuildings: Building[] = [
                 }}
               >
                 {selectedBuilding.services.map((service, index) => (
-                  <span
-                    key={index}
-                    style={{
-                      background: "#eef2ff",
-                      padding: "6px 10px",
-                      borderRadius: "8px",
-                      fontSize: "14px",
-                    }}
-                  >
+                  <span key={index} className="map-service-tag">
                     {service}
                   </span>
                 ))}
@@ -77,15 +69,7 @@ const popularBuildings: Building[] = [
                 href={`https://www.google.com/maps/search/?api=1&query=${selectedBuilding.position[0]},${selectedBuilding.position[1]}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  display: "inline-block",
-                  marginTop: "16px",
-                  padding: "10px 14px",
-                  background: "#2563eb",
-                  color: "#fff",
-                  textDecoration: "none",
-                  borderRadius: "8px",
-                }}
+                className="map-open-link"
               >
                 {t("map.openMaps")}
               </a>

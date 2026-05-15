@@ -135,24 +135,10 @@ export default function Map({ onSelectBuilding }: MapProps) {
 
   return (
     <>
-      <div
-        style={{
-          padding: "12px",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "8px",
-          borderBottom: "1px solid #ddd",
-          background: "#fff",
-        }}
-      >
+      <div className="map-filter-bar">
         <button
+          className="map-filter-btn"
           onClick={() => setSelectedCategory("all")}
-          style={{
-            padding: "8px 12px",
-            borderRadius: "8px",
-            border: "1px solid #ccc",
-            cursor: "pointer",
-          }}
         >
           Visi
         </button>
@@ -160,14 +146,8 @@ export default function Map({ onSelectBuilding }: MapProps) {
         {categories.map((category) => (
           <button
             key={category}
+            className="map-filter-btn"
             onClick={() => setSelectedCategory(category)}
-            style={{
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: "1px solid #ccc",
-              cursor: "pointer",
-              textTransform: "capitalize",
-            }}
           >
             {category === "faculty" && "Fakultetai"}
             {category === "library" && "Bibliotekos"}

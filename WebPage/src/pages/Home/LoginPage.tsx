@@ -57,7 +57,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                     </label>
 
                     {error && (
-                        <p style={{ color: "#ef4444", fontWeight: 600 }}>{error}</p>
+                        <p className="form-error-text">{error}</p>
                     )}
 
                     <button type="submit" className="btn btn--primary">

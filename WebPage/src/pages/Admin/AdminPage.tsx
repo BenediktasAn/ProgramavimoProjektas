@@ -7,6 +7,11 @@ import logoSrc from "../../assets/logo.png";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 
+export interface AdminPageProps {
+    theme: "light" | "dark";
+    onToggleTheme: () => void;
+}
+
 const PRESET_CATEGORIES = [
     "Academic Rules", "Scholarships", "Dormitories", "Student Life", "Exams", "Other",
 ];
@@ -26,7 +31,7 @@ interface DocumentItem {
 
 type AdminTab = "upload" | "documents" | "feedback";
 
-export default function AdminPage() {
+export default function AdminPage({ theme, onToggleTheme }: AdminPageProps) {
     const [password, setPassword] = useState("");
     const [authed, setAuthed] = useState(false);
     const [authError, setAuthError] = useState("");
@@ -165,7 +170,13 @@ export default function AdminPage() {
 
     return (
         <PageLayoutDocs
-            header={<Header logo={{ src: logoSrc, alt: "askKTU logo" }} />}
+            header={
+                <Header
+                    logo={{ src: logoSrc, alt: "askKTU logo" }}
+                    theme={theme}
+                    onToggleTheme={onToggleTheme}
+                />
+            }
             topNav={<TopNav />}
             rightMain={
                 <section className="document-container">
@@ -182,7 +193,7 @@ export default function AdminPage() {
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
                             />
-                            {authError && <p style={{ color: "#ef4444" }}>{authError}</p>}
+                            {authError && <p className="form-error-text">{authError}</p>}
                             <button type="submit" className="btn btn--primary">Continue</button>
                         </form>
                     ) : (

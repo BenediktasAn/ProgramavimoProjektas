@@ -9,11 +9,22 @@ import {useState} from "react";
 
 
 
-export default function DocumentPage() {
+export interface DocumentPageProps {
+    theme: "light" | "dark";
+    onToggleTheme: () => void;
+}
+
+export default function DocumentPage({ theme, onToggleTheme }: DocumentPageProps) {
     const [selectedDocument, setSelectedDocument] = useState<string>();
     return (
         <PageLayoutDocs
-            header={<Header logo={{ src: logoSrc, alt: "askKTU logo" }} />}
+            header={
+                <Header
+                    logo={{ src: logoSrc, alt: "askKTU logo" }}
+                    theme={theme}
+                    onToggleTheme={onToggleTheme}
+                />
+            }
             topNav={<TopNav />}
             rightMain={
                 <div className="hero-layout docs-layout">
